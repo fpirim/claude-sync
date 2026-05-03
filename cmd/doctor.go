@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fikret/claude-sync/internal/fsops"
+	"github.com/fpirim/claude-sync/internal/fsops"
 	"github.com/spf13/cobra"
 )
 

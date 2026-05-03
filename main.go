@@ -1,6 +1,6 @@
 package main
 
-import "github.com/fikret/claude-sync/cmd"
+import "github.com/fpirim/claude-sync/cmd"
 
 func main() {
 	cmd.Execute()

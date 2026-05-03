@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/encoder"
-	"github.com/fikret/claude-sync/internal/fsops"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/encoder"
+	"github.com/fpirim/claude-sync/internal/fsops"
+	"github.com/fpirim/claude-sync/internal/paths"
 )
 
 type projectItem struct {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/fikret/claude-sync/internal/encoder"
-	"github.com/fikret/claude-sync/internal/fsops"
+	"github.com/fpirim/claude-sync/internal/encoder"
+	"github.com/fpirim/claude-sync/internal/fsops"
 	"github.com/spf13/cobra"
 )
 

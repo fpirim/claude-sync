@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fikret/claude-sync/internal/paths"
-	"github.com/fikret/claude-sync/internal/sessions"
+	"github.com/fpirim/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/sessions"
 )
 
 type sessionsModel struct {

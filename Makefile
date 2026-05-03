@@ -5,7 +5,7 @@
 -include .env
 
 BINARY  := claude-sync
-PKG     := github.com/fikret/claude-sync
+PKG     := github.com/fpirim/claude-sync
 VERSION ?= $(shell git -C $(CURDIR) describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X '$(PKG)/cmd.Version=$(VERSION)'
 GOFLAGS := -trimpath -ldflags '$(LDFLAGS)'

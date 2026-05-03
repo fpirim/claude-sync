@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/paths"
 )
 
 func TestRootRenders(t *testing.T) {

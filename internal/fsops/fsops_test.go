@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/paths"
 )
 
 func TestEnsureSymlinkIdempotent(t *testing.T) {

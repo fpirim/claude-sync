@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/fsops"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/fsops"
 	"github.com/spf13/cobra"
 )
 

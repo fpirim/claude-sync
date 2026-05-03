@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/paths"
 )
 
 type configModel struct {

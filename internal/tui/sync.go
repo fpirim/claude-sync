@@ -8,9 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/paths"
-	"github.com/fikret/claude-sync/internal/syncthing"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/syncthing"
 )
 
 // syncModel is the Tab 3 state. It auto-discovers the local Syncthing

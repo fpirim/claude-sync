@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/machine"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/machine"
+	"github.com/fpirim/claude-sync/internal/paths"
 	"github.com/spf13/cobra"
 )
 

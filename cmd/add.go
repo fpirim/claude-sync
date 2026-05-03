@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/fikret/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/config"
 	"github.com/spf13/cobra"
 )
 

@@ -2,7 +2,7 @@ package cmd
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fikret/claude-sync/internal/tui"
+	"github.com/fpirim/claude-sync/internal/tui"
 	"github.com/spf13/cobra"
 )
 

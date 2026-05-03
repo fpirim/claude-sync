@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fikret/claude-sync/internal/paths"
-	"github.com/fikret/claude-sync/internal/sessions"
+	"github.com/fpirim/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/sessions"
 )
 
 // Verify the full sessions body never exceeds the body height, using a real

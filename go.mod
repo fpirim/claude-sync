@@ -1,4 +1,4 @@
-module github.com/fikret/claude-sync
+module github.com/fpirim/claude-sync
 
 go 1.26.2
 

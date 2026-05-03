@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/encoder"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/encoder"
+	"github.com/fpirim/claude-sync/internal/paths"
 )
 
 // Action is a single planned change (or no-op note) from RepairPlan.

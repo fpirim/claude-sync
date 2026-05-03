@@ -9,9 +9,9 @@ package tui
 import (
 	"fmt"
 
-	"github.com/fikret/claude-sync/internal/config"
-	"github.com/fikret/claude-sync/internal/fsops"
-	"github.com/fikret/claude-sync/internal/paths"
+	"github.com/fpirim/claude-sync/internal/config"
+	"github.com/fpirim/claude-sync/internal/fsops"
+	"github.com/fpirim/claude-sync/internal/paths"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
