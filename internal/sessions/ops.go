@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // Rename gives the session a friendly title by APPENDING a Claude-native
@@ -34,11 +33,18 @@ func Rename(jsonlPath, title string) error {
 	}
 	sid := strings.TrimSuffix(filepath.Base(jsonlPath), ".jsonl")
 
-	rec := map[string]any{
-		"type":        "custom-title",
-		"customTitle": title,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
-		"sessionId":   sid,
+	// Match Claude's exact custom-title shape — same fields, same order, no
+	// timestamp. Empirically Claude treats records WITH a timestamp as
+	// auto-generated metadata and ignores them for the displayed name; only
+	// timestamp-less custom-title records are honored as the user's rename.
+	rec := struct {
+		Type        string `json:"type"`
+		CustomTitle string `json:"customTitle"`
+		SessionID   string `json:"sessionId"`
+	}{
+		Type:        "custom-title",
+		CustomTitle: title,
+		SessionID:   sid,
 	}
 	b, err := json.Marshal(rec)
 	if err != nil {

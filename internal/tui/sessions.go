@@ -93,6 +93,10 @@ func sessionsRefreshCmd(pp paths.Paths, project, directDir string) tea.Cmd {
 
 type sessionsLoadedMsg struct{ items []sessions.Session }
 
+// sessionRenamedMsg is dispatched after a successful Rename so the list
+// can update its in-memory copy without depending on a disk re-read.
+type sessionRenamedMsg struct{ path, title string }
+
 func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -108,6 +112,21 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 		}
 		m.preview.Width = previewW
 		m.preview.Height = previewH
+		return m, nil
+
+	case sessionRenamedMsg:
+		// Optimistic in-memory title update. Refreshing from disk is
+		// unreliable when Claude is actively running on the same JSONL —
+		// it may flush a stale custom-title echo right after our write,
+		// making the next read look like the rename never happened. By
+		// patching the in-memory item we always reflect the user's intent
+		// regardless of any race with Claude's background activity.
+		for i := range m.items {
+			if m.items[i].Path == msg.path {
+				m.items[i].CustomTitle = msg.title
+				break
+			}
+		}
 		return m, nil
 
 	case sessionsLoadedMsg:
@@ -220,6 +239,9 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 			if defaultTitle == "" {
 				defaultTitle = s.AITitle
 			}
+			_ = pp
+			_ = project
+			_ = direct
 			return m, func() tea.Msg {
 				modal := NewInputModal(
 					"Rename session",
@@ -233,9 +255,8 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 								if err := sessions.Rename(path, title); err != nil {
 									return flashMsg{text: err.Error(), err: true}
 								}
-								return nil
+								return sessionRenamedMsg{path: path, title: title}
 							},
-							sessionsRefreshCmd(pp, project, direct),
 							flash("renamed"),
 						)
 					},

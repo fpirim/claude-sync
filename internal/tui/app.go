@@ -263,7 +263,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.cfgTab, cmd = m.cfgTab.update(msg)
 		return m, cmd
-	case sessionsLoadedMsg, previewMsg:
+	case sessionsLoadedMsg, previewMsg, sessionRenamedMsg:
 		var cmd tea.Cmd
 		m.sessions, cmd = m.sessions.update(msg)
 		return m, cmd
