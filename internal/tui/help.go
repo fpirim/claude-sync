@@ -7,10 +7,10 @@ import "strings"
 // presses '?'.
 func helpFor(tab Tab, sessionsPreviewFocused bool) string {
 	global := []string{
-		"  1 / 2 / 4    switch tabs",
-		"  tab          cycle tabs",
-		"  r            refresh",
-		"  q / ctrl+c   quit",
+		"  1 / 2 / 3 / 4   switch tabs",
+		"  tab             cycle tabs",
+		"  r               refresh",
+		"  q / ctrl+c      quit",
 	}
 
 	var tabKeys []string
@@ -48,6 +48,12 @@ func helpFor(tab Tab, sessionsPreviewFocused bool) string {
 				"  D              delete session",
 				"  backspace      back to projects",
 			}
+		}
+	case TabSync:
+		title = "Sync"
+		tabKeys = []string{
+			"  s            trigger a manual rescan of the folder",
+			"  (auto-polls every 2s while the tab is mounted)",
 		}
 	case TabConfig:
 		title = "Config"

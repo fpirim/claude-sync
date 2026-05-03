@@ -38,6 +38,7 @@ type Tab int
 const (
 	TabProjects Tab = iota
 	TabSessions
+	TabSync
 	TabConfig
 )
 
@@ -47,6 +48,8 @@ func (t Tab) Label() string {
 		return "Projects"
 	case TabSessions:
 		return "Sessions"
+	case TabSync:
+		return "Sync"
 	case TabConfig:
 		return "Config"
 	}
@@ -54,13 +57,14 @@ func (t Tab) Label() string {
 }
 
 // Number returns the 1-based key the user types to jump to this tab.
-// We skip 3 because Tab 3 (Sync) lands in M3.
 func (t Tab) Number() int {
 	switch t {
 	case TabProjects:
 		return 1
 	case TabSessions:
 		return 2
+	case TabSync:
+		return 3
 	case TabConfig:
 		return 4
 	}
@@ -78,6 +82,7 @@ type Model struct {
 	active   Tab
 	projects projectsModel
 	sessions sessionsModel
+	sync     syncModel
 	cfgTab   configModel
 
 	// Active modal overlay. Non-nil suppresses global shortcuts and routes
@@ -90,20 +95,19 @@ type Model struct {
 
 // New constructs the root model.
 func New(p paths.Paths, cfg config.Config, machine string) Model {
-	pr := newProjectsModel(p, cfg, machine)
-	se := newSessionsModel(p, "")
-	cf := newConfigModel(p)
-	return Model{
+	model := Model{
 		P: p, Cfg: cfg, Machine: machine,
-		active:   TabProjects,
-		projects: pr,
-		sessions: se,
-		cfgTab:   cf,
+		active: TabProjects,
 	}
+	model.projects = newProjectsModel(p, cfg, machine)
+	model.sessions = newSessionsModel(p, "")
+	model.sync = newSyncModel(p, &model.Cfg)
+	model.cfgTab = newConfigModel(p)
+	return model
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.projects.Init(), m.sessions.Init(), m.cfgTab.Init())
+	return tea.Batch(m.projects.Init(), m.sessions.Init(), m.sync.Init(), m.cfgTab.Init())
 }
 
 // flashMsg is dispatched by sub-models to set the footer status line.
@@ -171,6 +175,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, c)
 		m.sessions, c = m.sessions.update(body)
 		cmds = append(cmds, c)
+		m.sync, c = m.sync.update(body)
+		cmds = append(cmds, c)
 		m.cfgTab, c = m.cfgTab.update(body)
 		cmds = append(cmds, c)
 		return m, tea.Batch(cmds...)
@@ -186,11 +192,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "2":
 			m.active = TabSessions
 			return m, nil
+		case "3":
+			m.active = TabSync
+			return m, nil
 		case "4":
 			m.active = TabConfig
 			return m, nil
 		case "tab":
-			m.active = (m.active + 1) % 3
+			m.active = (m.active + 1) % 4
 			return m, nil
 		case "?":
 			body := helpFor(m.active, m.active == TabSessions && m.sessions.previewFocused)
@@ -258,6 +267,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.sessions, cmd = m.sessions.update(msg)
 		return m, cmd
+	case syncTickMsg, syncSnapshotMsg:
+		var cmd tea.Cmd
+		m.sync, cmd = m.sync.update(msg)
+		return m, cmd
 	}
 
 	// Forward to active sub-model.
@@ -267,6 +280,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projects, cmd = m.projects.update(msg)
 	case TabSessions:
 		m.sessions, cmd = m.sessions.update(msg)
+	case TabSync:
+		m.sync, cmd = m.sync.update(msg)
 	case TabConfig:
 		m.cfgTab, cmd = m.cfgTab.update(msg)
 	}
@@ -286,6 +301,8 @@ func (m Model) View() string {
 			body = m.projects.view(m.w, m.h-2)
 		case TabSessions:
 			body = m.sessions.view(m.w, m.h-2)
+		case TabSync:
+			body = m.sync.view(m.w, m.h-2)
 		case TabConfig:
 			body = m.cfgTab.view(m.w, m.h-2)
 		}
@@ -302,7 +319,7 @@ func (m Model) View() string {
 }
 
 func (m Model) header() string {
-	tabs := []Tab{TabProjects, TabSessions, TabConfig}
+	tabs := []Tab{TabProjects, TabSessions, TabSync, TabConfig}
 	parts := []string{Styles.Title.Render(" claude-sync ")}
 	for _, t := range tabs {
 		label := fmt.Sprintf("[%d]%s", t.Number(), t.Label())
