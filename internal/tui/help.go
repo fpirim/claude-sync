@@ -43,6 +43,7 @@ func helpFor(tab Tab, sessionsPreviewFocused bool) string {
 				"  pgup / pgdn    page up / down",
 				"  shift+↑ / ↓    resize the divider",
 				"  enter          focus the preview pane",
+				"  c              continue session (claude --resume)",
 				"  R              rename session",
 				"  A              archive / unarchive",
 				"  D              delete session",

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -230,6 +232,11 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 				m.refresh(),
 				flash(map[bool]string{true: "archived", false: "unarchived"}[now]),
 			)
+		case "c":
+			if m.cursor >= len(m.items) {
+				return m, nil
+			}
+			return m, m.resumeCurrent()
 		case "D":
 			if m.cursor >= len(m.items) {
 				return m, nil
@@ -415,6 +422,53 @@ func (m sessionsModel) computeSplitForTwoPanes(totalRows int) (int, int) {
 		previewH = 2
 	}
 	return listRowsH, previewH
+}
+
+// resumeCurrent runs `claude --resume <uuid>` for the highlighted session.
+// When the user is inside a tmux session we open a new pane so the TUI
+// stays visible alongside Claude. Outside tmux we hand the terminal over
+// to Claude via tea.ExecProcess and resume the TUI when Claude exits.
+//
+// The cwd is taken from the session's recorded Cwd (the realpath the user
+// was in when the session started) — Claude resolves the encoded project
+// directory from cwd, so launching from the right place is essential.
+// If the cwd no longer exists locally we refuse rather than producing an
+// orphan session in the wrong place.
+func (m sessionsModel) resumeCurrent() tea.Cmd {
+	s := m.items[m.cursor]
+	cwd := s.Cwd
+	if cwd == "" {
+		return flashErr("session has no recorded cwd; cannot resume")
+	}
+	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
+		return flashErr("cwd does not exist on this host: " + cwd)
+	}
+	uuid := s.UUID
+
+	if os.Getenv("TMUX") != "" {
+		// Inside tmux: split the current window horizontally and run claude
+		// in the new pane. We pass the resume command as a single string to
+		// the shell since tmux's last argument is shell-evaluated.
+		shellCmd := fmt.Sprintf("claude --resume %s", uuid)
+		c := exec.Command("tmux", "split-window", "-h", "-c", cwd, shellCmd)
+		return func() tea.Msg {
+			if err := c.Run(); err != nil {
+				return flashMsg{text: "tmux split-window: " + err.Error(), err: true}
+			}
+			return flashMsg{text: "resumed " + uuid[:8] + " in new tmux pane"}
+		}
+	}
+
+	// No tmux: suspend the TUI and run Claude inline. tea.ExecProcess
+	// handles the alt-screen restore on return.
+	c := exec.Command("claude", "--resume", uuid)
+	c.Dir = cwd
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			return flashMsg{text: "claude exited: " + err.Error(), err: true}
+		}
+		return flashMsg{text: "resumed " + uuid[:8] + " · returned"}
+	})
 }
 
 // listVisibleRows returns how many SESSIONS the list currently shows —
