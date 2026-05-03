@@ -492,13 +492,24 @@ func (m sessionsModel) resumeCurrent() tea.Cmd {
 		// Inside tmux: open a new WINDOW (not a split pane) so Claude has
 		// the full terminal real estate. The TUI keeps running in its own
 		// window — flip back with prefix-p / prefix-n / prefix-w.
-		shellCmd := fmt.Sprintf("claude --resume %s", uuid)
-		c := exec.Command("tmux", "new-window", "-c", cwd, shellCmd)
+		//
+		// We pass `claude` and its flags as SEPARATE arguments to tmux
+		// rather than as a single shell-string. tmux execs them directly
+		// via spawn(2), so there's no chance of shell quoting eating
+		// characters in the UUID. The window title is set with -n so the
+		// user can see at a glance which session is in which window.
+		title := sessionTitle(s)
+		windowName := title
+		if len(windowName) > 32 {
+			windowName = windowName[:32]
+		}
+		args := []string{"new-window", "-n", windowName, "-c", cwd, "claude", "--resume", uuid}
+		c := exec.Command("tmux", args...)
 		return func() tea.Msg {
-			if err := c.Run(); err != nil {
-				return flashMsg{text: "tmux new-window: " + err.Error(), err: true}
+			if out, err := c.CombinedOutput(); err != nil {
+				return flashMsg{text: "tmux: " + err.Error() + " — " + string(out), err: true}
 			}
-			return flashMsg{text: "resumed " + uuid[:8] + " in new tmux window"}
+			return flashMsg{text: "resumed " + windowName + " (" + uuid[:8] + ")"}
 		}
 	}
 
