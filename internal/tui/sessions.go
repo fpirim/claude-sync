@@ -364,7 +364,10 @@ func (m sessionsModel) view(w, h int) string {
 		BorderTop(false).BorderLeft(true).BorderRight(true).BorderBottom(true)
 
 	rows, listOffset := m.renderListWindow(contentW, listRowsH)
-	listBar := scrollbar(listRowsH, len(m.items), listOffset)
+	// Scrollbar maps to TOTAL LINES, not items: each session is 2 lines tall,
+	// so total = items*2 and offset is the line index of the first visible
+	// row (renderListWindow returns it in line units already).
+	listBar := scrollbar(listRowsH, len(m.items)*2, listOffset)
 	listBody := lipgloss.JoinHorizontal(lipgloss.Top,
 		padToWidth(rows, contentW, listRowsH), listBar)
 	topInside := lipgloss.JoinVertical(lipgloss.Left, header, listBody)
@@ -414,14 +417,19 @@ func (m sessionsModel) computeSplitForTwoPanes(totalRows int) (int, int) {
 	return listRowsH, previewH
 }
 
-// listVisibleRows estimates how many rows the list currently shows — used by
-// pgup/pgdn to advance by a page worth of items.
+// listVisibleRows returns how many SESSIONS the list currently shows —
+// used by pgup/pgdn to advance by a page worth of items. Each session
+// renders as two lines, so the page step is half the line budget.
 func (m sessionsModel) listVisibleRows() int {
-	r, _ := m.computeSplitForTwoPanes(m.h - 2 - 3)
-	if r < 1 {
-		r = 1
+	lines, _ := m.computeSplitForTwoPanes(m.h - 2 - 3)
+	if lines < 2 {
+		lines = 2
 	}
-	return r
+	items := lines / 2
+	if items < 1 {
+		items = 1
+	}
+	return items
 }
 
 // padToWidth right-pads each line of s to exactly w columns and ensures the
@@ -457,64 +465,130 @@ func sessionsListHeight(bodyH int) int {
 	return h
 }
 
-// renderListWindow renders a sliding window of sessions sized to height rows,
-// keeping the cursor visible. Returns the body text and the index of the
-// first visible row (so callers can sync a scrollbar).
+// sessionTitle returns the display title for a session, walking the
+// fallback chain: manual rename (legacy meta) > Claude/native ai-title >
+// first user message preview > "(no title)".
+func sessionTitle(s sessions.Session) string {
+	if s.Title != "" {
+		return s.Title
+	}
+	if s.AITitle != "" {
+		return s.AITitle
+	}
+	if s.Preview != "" {
+		return s.Preview
+	}
+	return "(no title)"
+}
+
+// renderListWindow renders a sliding window of sessions sized to height
+// LINES (not items — each item is two lines tall). Returns the body text
+// and the LINE offset of the first visible line so the scrollbar can sync.
 func (m sessionsModel) renderListWindow(width, height int) (string, int) {
 	if len(m.items) == 0 {
 		return Styles.Muted.Render("(no sessions)"), 0
 	}
-	if height < 1 {
-		height = 1
+	if height < 2 {
+		height = 2
+	}
+	itemsVisible := height / 2
+	if itemsVisible < 1 {
+		itemsVisible = 1
 	}
 	n := len(m.items)
 	// Center the cursor in the window when possible.
-	start := m.cursor - height/2
+	start := m.cursor - itemsVisible/2
 	if start < 0 {
 		start = 0
 	}
-	end := start + height
+	end := start + itemsVisible
 	if end > n {
 		end = n
-		start = end - height
+		start = end - itemsVisible
 		if start < 0 {
 			start = 0
 		}
 	}
+
+	selStyle := Styles.Selected.Width(width)
+	mutedRow := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Width(width)
+	plainRow := lipgloss.NewStyle().Width(width)
+
 	var sb strings.Builder
+	wrote := 0
 	for i := start; i < end; i++ {
 		s := m.items[i]
-		title := s.Title
-		if title == "" {
-			if s.Preview != "" {
-				title = s.Preview
-			} else {
-				title = "(empty)"
-			}
-		}
-		if len(title) > width-25 && width > 30 {
-			title = title[:width-25] + "…"
-		}
+
+		// First line: cursor + date + msg count + title.
 		date := s.LastAt.Format("01-02 15:04")
 		flag := " "
 		if s.Archived {
 			flag = "a"
 		}
-		line := fmt.Sprintf("%s %-11s %3d  %s", flag, date, s.MsgCount, title)
+		title := sessionTitle(s)
+		head := fmt.Sprintf(" %s  %s  ·  %3d msgs  ·  %s", flag, date, s.MsgCount, title)
 		if i == m.cursor {
-			// Width(width) makes the indigo background span the full row,
-			// not just the text. Without it the highlight stops where the
-			// title ends.
-			line = Styles.Selected.Width(width).Render("▸ " + line)
-		} else {
-			line = "  " + line
+			head = " " + head[1:] // keep alignment; selStyle handles bg
 		}
-		sb.WriteString(line)
-		if i != end-1 {
+
+		// Second line: the most recent user/assistant body, indented under
+		// the title for visual grouping.
+		last := s.LastText
+		if last == "" {
+			last = s.Preview
+		}
+		if last == "" {
+			last = "(empty)"
+		}
+		body := "      " + strings.ReplaceAll(last, "\n", " ")
+
+		// Truncate both lines to width-1 so the trailing column never wraps.
+		head = clipLine(head, width)
+		body = clipLine(body, width)
+
+		var l1, l2 string
+		if i == m.cursor {
+			// Selected: both lines indigo, full-width.
+			l1 = selStyle.Bold(true).Render(replacePrefix(head, "▸"))
+			l2 = selStyle.Render(body)
+		} else {
+			l1 = plainRow.Render(head)
+			l2 = mutedRow.Render(body)
+		}
+
+		if wrote > 0 {
 			sb.WriteByte('\n')
 		}
+		sb.WriteString(l1)
+		sb.WriteByte('\n')
+		sb.WriteString(l2)
+		wrote += 2
 	}
-	return sb.String(), start
+	return sb.String(), start * 2
+}
+
+// clipLine truncates s to fit within w visible columns, appending an ellipsis
+// when content was dropped. ANSI codes embedded in s are preserved by the
+// truncate helper.
+func clipLine(s string, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	return rightTruncate(s, w)
+}
+
+// replacePrefix swaps the first character of s with the given marker. We use
+// it so the cursor "▸" lands in column 1 of selected rows without throwing
+// off the alignment of subsequent characters.
+func replacePrefix(s, marker string) string {
+	if s == "" {
+		return marker
+	}
+	r := []rune(s)
+	if len(r) == 0 {
+		return marker
+	}
+	return marker + string(r[1:])
 }
 
 // previewMsg handler is wired in update() via type switch — but we forgot to

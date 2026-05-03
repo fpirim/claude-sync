@@ -1,18 +1,77 @@
 package sessions
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
-// Rename sets the friendly title in the sidecar.
+// Rename gives the session a friendly title by APPENDING a Claude-native
+// ai-title record to the JSONL. Claude Code reads ai-title records to label
+// its own /resume listing, so this rename surfaces in Claude itself, not
+// just in claude-sync.
+//
+// Implementation notes:
+//   - We use O_APPEND so the write is atomic per call (single line < PIPE_BUF
+//     stays whole even if Claude is also writing). Multiple writers append
+//     safely at line boundaries on POSIX.
+//   - Any pre-existing meta.Title (from the legacy sidecar-only renamer) is
+//     cleared so the JSONL ai-title becomes the canonical source going
+//     forward. Tags and archived flags stay in the sidecar.
 func Rename(jsonlPath, title string) error {
-	m, err := LoadMeta(jsonlPath)
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return fmt.Errorf("title is empty")
+	}
+	sid := strings.TrimSuffix(filepath.Base(jsonlPath), ".jsonl")
+
+	rec := map[string]any{
+		"type":      "ai-title",
+		"aiTitle":   title,
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+		"sessionId": sid,
+		"userType":  "external",
+		"uuid":      "claude-sync-rename-" + time.Now().UTC().Format("20060102T150405.000000000Z"),
+	}
+	b, err := json.Marshal(rec)
 	if err != nil {
 		return err
 	}
-	m.Title = title
-	return SaveMeta(jsonlPath, m)
+	b = append(b, '\n')
+
+	f, err := os.OpenFile(jsonlPath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("open jsonl for append: %w", err)
+	}
+	defer f.Close()
+
+	// If the file doesn't end with a newline, prepend one so our object
+	// starts on its own line. Cheap check: stat size, read last byte.
+	if info, err := f.Stat(); err == nil && info.Size() > 0 {
+		var last [1]byte
+		if _, err := os.NewFile(f.Fd(), "").ReadAt(last[:], info.Size()-1); err == nil {
+			if last[0] != '\n' {
+				b = append([]byte{'\n'}, b...)
+			}
+		}
+	}
+
+	if _, err := f.Write(b); err != nil {
+		return fmt.Errorf("append ai-title: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("fsync: %w", err)
+	}
+
+	// Drop legacy sidecar Title so the new JSONL ai-title isn't shadowed.
+	if m, err := LoadMeta(jsonlPath); err == nil && m.Title != "" {
+		m.Title = ""
+		_ = SaveMeta(jsonlPath, m) // best-effort; not fatal
+	}
+	return nil
 }
 
 // SetArchived flips the archived flag.

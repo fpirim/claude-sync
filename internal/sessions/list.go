@@ -23,10 +23,12 @@ type Session struct {
 	Project   string    // logical project name
 	UUID      string    // basename without .jsonl
 	Path      string    // absolute path to the JSONL
-	Title     string    // from .meta.json (empty if none)
+	Title     string    // legacy: from .meta.json (Rename now writes ai-title to JSONL instead)
+	AITitle   string    // latest ai-title record from the JSONL (Claude or claude-sync rename)
 	Tags      []string
 	Archived  bool
 	Preview   string    // first user message, single-line, trimmed
+	LastText  string    // text of the most recent user/assistant message
 	MsgCount  int       // user+assistant lines
 	FirstAt   time.Time // timestamp of first user message (zero if absent)
 	LastAt    time.Time // mtime of file as fallback for "last activity"
@@ -39,6 +41,8 @@ type firstScan struct {
 	MsgCount int
 	FirstAt  time.Time
 	Cwd      string
+	AITitle  string // latest ai-title record encountered (latest wins)
+	LastText string // text of the latest user/assistant message
 }
 
 // ListProject returns sessions for one project under sharedRoot.
@@ -86,6 +90,8 @@ func ListDir(dir, label string) ([]Session, error) {
 			s.MsgCount = fs.MsgCount
 			s.FirstAt = fs.FirstAt
 			s.Cwd = fs.Cwd
+			s.AITitle = fs.AITitle
+			s.LastText = fs.LastText
 		}
 		// Overlay sidecar metadata.
 		if m, err := LoadMeta(full); err == nil {
@@ -145,6 +151,21 @@ func scanJSONL(path string) (firstScan, error) {
 		switch typ {
 		case "user", "assistant":
 			fs.MsgCount++
+			// Capture the latest message text — overwrites earlier ones so
+			// after the loop fs.LastText is the most recent user/assistant body.
+			var rec userRec
+			if err := json.Unmarshal(line, &rec); err == nil {
+				if t := extractPreview(rec.Message.Content); t != "" {
+					fs.LastText = t
+				}
+			}
+		case "ai-title":
+			// Latest ai-title wins. Claude Code refreshes this as the
+			// conversation evolves; claude-sync's native rename appends a
+			// new ai-title record so the user's title becomes the latest.
+			if t := jsonField(line, "aiTitle"); t != "" {
+				fs.AITitle = clip(t)
+			}
 		}
 		if !gotFirstUser && typ == "user" {
 			var rec userRec
