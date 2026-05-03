@@ -66,13 +66,23 @@ func sessionsRefreshCmd(pp paths.Paths, project, directDir string) tea.Cmd {
 	return func() tea.Msg {
 		var ss []sessions.Session
 		var err error
+		// Fallback ladder: if directDir was captured but the dir is gone
+		// (e.g. the user adopted/migrated a stray since the tab was opened),
+		// drop back to project-mode so the renamed session still surfaces.
+		// Without this the list looks empty after a rename and the user
+		// thinks the rename failed.
+		canon := strings.TrimSuffix(project, " (stray)")
 		switch {
 		case directDir != "":
-			ss, err = sessions.ListDir(directDir, project)
+			if _, statErr := os.Stat(directDir); statErr == nil {
+				ss, err = sessions.ListDir(directDir, project)
+			} else if canon != "" {
+				ss, err = sessions.ListProject(pp.Shared, canon)
+			}
 		case project == "":
 			ss, err = sessions.ListAll(pp.Shared)
 		default:
-			ss, err = sessions.ListProject(pp.Shared, project)
+			ss, err = sessions.ListProject(pp.Shared, canon)
 		}
 		if err != nil {
 			return flashMsg{text: err.Error(), err: true}
@@ -119,6 +129,13 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// `c` resumes the highlighted session and is allowed in any focus
+		// mode — it's always meaningful no matter where the user is in
+		// the tab, and "do nothing" is the wrong answer.
+		if msg.String() == "c" && len(m.items) > 0 && m.cursor < len(m.items) {
+			return m, m.resumeCurrent()
+		}
+
 		// Preview-focused mode: every key scrolls the viewport. Esc and
 		// backspace return focus to the list. Action keys (R/A/D) are
 		// intentionally ignored so the user has to step out before mutating.
@@ -242,11 +259,6 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 				m.refresh(),
 				flash(map[bool]string{true: "archived", false: "unarchived"}[now]),
 			)
-		case "c":
-			if m.cursor >= len(m.items) {
-				return m, nil
-			}
-			return m, m.resumeCurrent()
 		case "D":
 			if m.cursor >= len(m.items) {
 				return m, nil
