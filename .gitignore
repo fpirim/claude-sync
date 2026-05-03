@@ -1,0 +1,5 @@
+/claude-sync
+/dist/
+/.env
+*.bak
+.DS_Store

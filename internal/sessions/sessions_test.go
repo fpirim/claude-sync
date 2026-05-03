@@ -1,0 +1,68 @@
+package sessions
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+const sampleJSONL = `{"type":"permission-mode","permissionMode":"default","sessionId":"abc"}
+{"parentUuid":null,"type":"user","message":{"role":"user","content":"hello world from test"},"uuid":"u1","timestamp":"2026-05-02T14:03:07.855Z","cwd":"/Users/fikret/foo","sessionId":"abc"}
+{"type":"assistant","message":{"role":"assistant","content":"hi there"},"uuid":"a1","timestamp":"2026-05-02T14:03:08.000Z","sessionId":"abc"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"second user msg"}]},"uuid":"u2","timestamp":"2026-05-02T14:03:09.000Z","sessionId":"abc"}
+`
+
+func TestListProject(t *testing.T) {
+	dir := t.TempDir()
+	proj := filepath.Join(dir, "foo")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "abc.jsonl"), []byte(sampleJSONL), 0o644)
+
+	out, err := ListProject(dir, "foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("got %d sessions", len(out))
+	}
+	s := out[0]
+	if s.Preview != "hello world from test" {
+		t.Errorf("preview = %q", s.Preview)
+	}
+	if s.MsgCount != 3 {
+		t.Errorf("msgcount = %d", s.MsgCount)
+	}
+	if s.Cwd != "/Users/fikret/foo" {
+		t.Errorf("cwd = %q", s.Cwd)
+	}
+	if s.FirstAt.IsZero() {
+		t.Error("FirstAt zero")
+	}
+}
+
+func TestMetaRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "x.jsonl")
+	os.WriteFile(p, []byte("{}"), 0o644)
+	if err := Rename(p, "My Session"); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddTag(p, "important"); err != nil {
+		t.Fatal(err)
+	}
+	m, err := LoadMeta(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Title != "My Session" || len(m.Tags) != 1 || m.Tags[0] != "important" {
+		t.Errorf("meta = %+v", m)
+	}
+	// AddTag idempotent
+	if err := AddTag(p, "important"); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = LoadMeta(p)
+	if len(m.Tags) != 1 {
+		t.Errorf("dupe tag added: %+v", m.Tags)
+	}
+}
