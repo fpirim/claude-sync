@@ -193,12 +193,22 @@ func (m sessionsModel) update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 			pp := m.p
 			project := m.project
 			direct := m.directDir
+			// Pre-fill with the current title so the user can refine instead
+			// of retyping. Preview/no-title placeholders are skipped — those
+			// would just be noise for the user to delete.
+			defaultTitle := s.CustomTitle
+			if defaultTitle == "" {
+				defaultTitle = s.Title
+			}
+			if defaultTitle == "" {
+				defaultTitle = s.AITitle
+			}
 			return m, func() tea.Msg {
 				modal := NewInputModal(
 					"Rename session",
 					"Friendly title:",
 					"e.g. Refactor auth flow",
-					s.Title,
+					defaultTitle,
 					func(title string) tea.Cmd {
 						title = strings.TrimSpace(title)
 						return tea.Sequence(
@@ -579,23 +589,29 @@ func (m sessionsModel) renderListWindow(width, height int) (string, int) {
 	selStyle := Styles.Selected.Width(width)
 	mutedRow := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Width(width)
 	plainRow := lipgloss.NewStyle().Width(width)
+	// Bright yellow title — pops on the default background and stays
+	// readable on the indigo highlight (background overrides bg, fg stays).
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 
 	var sb strings.Builder
 	wrote := 0
 	for i := start; i < end; i++ {
 		s := m.items[i]
 
-		// First line: cursor + date + msg count + title.
+		// First line: cursor + flag + date + msg count + title.
 		date := s.LastAt.Format("01-02 15:04")
 		flag := " "
 		if s.Archived {
 			flag = "a"
 		}
-		title := sessionTitle(s)
-		head := fmt.Sprintf(" %s  %s  ·  %3d msgs  ·  %s", flag, date, s.MsgCount, title)
+		prefix := "  "
 		if i == m.cursor {
-			head = " " + head[1:] // keep alignment; selStyle handles bg
+			prefix = "▸ "
 		}
+		title := sessionTitle(s)
+		titleColored := titleStyle.Render(title)
+		head := fmt.Sprintf("%s%s  %s  ·  %3d msgs  ·  %s",
+			prefix, flag, date, s.MsgCount, titleColored)
 
 		// Second line: the most recent user/assistant body, indented under
 		// the title for visual grouping.
@@ -608,14 +624,16 @@ func (m sessionsModel) renderListWindow(width, height int) (string, int) {
 		}
 		body := "      " + strings.ReplaceAll(last, "\n", " ")
 
-		// Truncate both lines to width-1 so the trailing column never wraps.
-		head = clipLine(head, width)
-		body = clipLine(body, width)
+		// Truncate both lines to width so the trailing column never wraps.
+		// rightTruncate is ANSI-aware so the embedded yellow code is kept.
+		head = rightTruncate(head, width)
+		body = rightTruncate(body, width)
 
 		var l1, l2 string
 		if i == m.cursor {
-			// Selected: both lines indigo, full-width.
-			l1 = selStyle.Bold(true).Render(replacePrefix(head, "▸"))
+			// Selected: both lines on indigo bg. Embedded title fg (yellow)
+			// stays inside the bg; the rest gets the bold white default.
+			l1 = selStyle.Bold(true).Render(head)
 			l2 = selStyle.Render(body)
 		} else {
 			l1 = plainRow.Render(head)
@@ -631,30 +649,6 @@ func (m sessionsModel) renderListWindow(width, height int) (string, int) {
 		wrote += 2
 	}
 	return sb.String(), start * 2
-}
-
-// clipLine truncates s to fit within w visible columns, appending an ellipsis
-// when content was dropped. ANSI codes embedded in s are preserved by the
-// truncate helper.
-func clipLine(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	return rightTruncate(s, w)
-}
-
-// replacePrefix swaps the first character of s with the given marker. We use
-// it so the cursor "▸" lands in column 1 of selected rows without throwing
-// off the alignment of subsequent characters.
-func replacePrefix(s, marker string) string {
-	if s == "" {
-		return marker
-	}
-	r := []rune(s)
-	if len(r) == 0 {
-		return marker
-	}
-	return marker + string(r[1:])
 }
 
 // previewMsg handler is wired in update() via type switch — but we forgot to
