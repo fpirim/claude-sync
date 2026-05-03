@@ -446,16 +446,16 @@ func (m sessionsModel) resumeCurrent() tea.Cmd {
 	uuid := s.UUID
 
 	if os.Getenv("TMUX") != "" {
-		// Inside tmux: split the current window horizontally and run claude
-		// in the new pane. We pass the resume command as a single string to
-		// the shell since tmux's last argument is shell-evaluated.
+		// Inside tmux: open a new WINDOW (not a split pane) so Claude has
+		// the full terminal real estate. The TUI keeps running in its own
+		// window — flip back with prefix-p / prefix-n / prefix-w.
 		shellCmd := fmt.Sprintf("claude --resume %s", uuid)
-		c := exec.Command("tmux", "split-window", "-h", "-c", cwd, shellCmd)
+		c := exec.Command("tmux", "new-window", "-c", cwd, shellCmd)
 		return func() tea.Msg {
 			if err := c.Run(); err != nil {
-				return flashMsg{text: "tmux split-window: " + err.Error(), err: true}
+				return flashMsg{text: "tmux new-window: " + err.Error(), err: true}
 			}
-			return flashMsg{text: "resumed " + uuid[:8] + " in new tmux pane"}
+			return flashMsg{text: "resumed " + uuid[:8] + " in new tmux window"}
 		}
 	}
 
@@ -520,9 +520,21 @@ func sessionsListHeight(bodyH int) int {
 }
 
 // sessionTitle returns the display title for a session, walking the
-// fallback chain: manual rename (legacy meta) > Claude/native ai-title >
-// first user message preview > "(no title)".
+// fallback chain in order of authority:
+//
+//   CustomTitle  — user-set rename (Claude's /rename or claude-sync R)
+//   meta.Title   — legacy sidecar rename (pre-native-rename builds)
+//   AITitle      — Claude's auto-generated title
+//   Preview      — first user message
+//   "(no title)" — empty session
+//
+// CustomTitle outranks meta.Title because Claude itself uses custom-title
+// records as the authoritative user choice; an old sidecar value here
+// only matters if the JSONL has no custom-title record at all.
 func sessionTitle(s sessions.Session) string {
+	if s.CustomTitle != "" {
+		return s.CustomTitle
+	}
 	if s.Title != "" {
 		return s.Title
 	}

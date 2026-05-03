@@ -23,8 +23,9 @@ type Session struct {
 	Project   string    // logical project name
 	UUID      string    // basename without .jsonl
 	Path      string    // absolute path to the JSONL
-	Title     string    // legacy: from .meta.json (Rename now writes ai-title to JSONL instead)
-	AITitle   string    // latest ai-title record from the JSONL (Claude or claude-sync rename)
+	Title       string // legacy: from .meta.json (Rename now writes custom-title to JSONL instead)
+	CustomTitle string // latest custom-title record — Claude's user-rename channel; highest priority
+	AITitle     string // latest ai-title record — Claude's auto-generated title; lower priority
 	Tags      []string
 	Archived  bool
 	Preview   string    // first user message, single-line, trimmed
@@ -37,12 +38,13 @@ type Session struct {
 }
 
 type firstScan struct {
-	Preview  string
-	MsgCount int
-	FirstAt  time.Time
-	Cwd      string
-	AITitle  string // latest ai-title record encountered (latest wins)
-	LastText string // text of the latest user/assistant message
+	Preview     string
+	MsgCount    int
+	FirstAt     time.Time
+	Cwd         string
+	AITitle     string // latest ai-title record encountered (latest wins)
+	CustomTitle string // latest custom-title record encountered (latest wins)
+	LastText    string // text of the latest user/assistant message
 }
 
 // ListProject returns sessions for one project under sharedRoot.
@@ -91,6 +93,7 @@ func ListDir(dir, label string) ([]Session, error) {
 			s.FirstAt = fs.FirstAt
 			s.Cwd = fs.Cwd
 			s.AITitle = fs.AITitle
+			s.CustomTitle = fs.CustomTitle
 			s.LastText = fs.LastText
 		}
 		// Overlay sidecar metadata.
@@ -161,10 +164,15 @@ func scanJSONL(path string) (firstScan, error) {
 			}
 		case "ai-title":
 			// Latest ai-title wins. Claude Code refreshes this as the
-			// conversation evolves; claude-sync's native rename appends a
-			// new ai-title record so the user's title becomes the latest.
+			// conversation evolves.
 			if t := jsonField(line, "aiTitle"); t != "" {
 				fs.AITitle = clip(t)
+			}
+		case "custom-title":
+			// User-set rename channel — highest priority. Both Claude's own
+			// /rename command and claude-sync's R action write here.
+			if t := jsonField(line, "customTitle"); t != "" {
+				fs.CustomTitle = clip(t)
 			}
 		}
 		if !gotFirstUser && typ == "user" {

@@ -51,15 +51,18 @@ func TestListProject(t *testing.T) {
 	}
 }
 
-// TestRenameAppendsAITitle verifies the new native-rename behavior: Rename
-// must write a Claude-compatible ai-title record into the JSONL itself, not
-// just into the .meta sidecar.
-func TestRenameAppendsAITitle(t *testing.T) {
+// TestRenameAppendsCustomTitle verifies that Rename writes the user's title
+// into Claude's custom-title channel — the same channel Claude uses for its
+// own /rename command, which outranks any ai-title record on display.
+func TestRenameAppendsCustomTitle(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "abc.jsonl")
-	os.WriteFile(p, []byte(`{"type":"user","message":{"role":"user","content":"hi"},"sessionId":"abc"}`+"\n"), 0o644)
+	os.WriteFile(p, []byte(
+		`{"type":"user","message":{"role":"user","content":"hi"},"sessionId":"abc"}`+"\n"+
+			`{"type":"ai-title","aiTitle":"Auto title","sessionId":"abc"}`+"\n",
+	), 0o644)
 
-	if err := Rename(p, "My Renamed Session"); err != nil {
+	if err := Rename(p, "User Choice"); err != nil {
 		t.Fatal(err)
 	}
 	out, err := ListProject(dir, "")
@@ -69,8 +72,12 @@ func TestRenameAppendsAITitle(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("got %d sessions", len(out))
 	}
-	if out[0].AITitle != "My Renamed Session" {
-		t.Errorf("AITitle after rename = %q", out[0].AITitle)
+	if out[0].CustomTitle != "User Choice" {
+		t.Errorf("CustomTitle = %q (want %q)", out[0].CustomTitle, "User Choice")
+	}
+	// AITitle still readable independently — display-side picks Custom over AI.
+	if out[0].AITitle != "Auto title" {
+		t.Errorf("AITitle = %q (auto title should still be parsed)", out[0].AITitle)
 	}
 }
 

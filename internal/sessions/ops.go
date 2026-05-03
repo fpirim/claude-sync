@@ -10,17 +10,23 @@ import (
 )
 
 // Rename gives the session a friendly title by APPENDING a Claude-native
-// ai-title record to the JSONL. Claude Code reads ai-title records to label
-// its own /resume listing, so this rename surfaces in Claude itself, not
-// just in claude-sync.
+// custom-title record to the JSONL. Claude Code uses TWO title record
+// types, with strict precedence:
+//
+//   custom-title  — the user's manual rename (highest priority)
+//   ai-title      — Claude's automatically refined title
+//
+// We pick custom-title because the rename is an explicit user action,
+// equivalent to Claude's own /rename command. Writing ai-title would be
+// shadowed the moment any older custom-title exists in the file.
 //
 // Implementation notes:
-//   - We use O_APPEND so the write is atomic per call (single line < PIPE_BUF
+//   - O_APPEND makes the write atomic per call (single line < PIPE_BUF
 //     stays whole even if Claude is also writing). Multiple writers append
 //     safely at line boundaries on POSIX.
-//   - Any pre-existing meta.Title (from the legacy sidecar-only renamer) is
-//     cleared so the JSONL ai-title becomes the canonical source going
-//     forward. Tags and archived flags stay in the sidecar.
+//   - Any pre-existing meta.Title (from the legacy sidecar-only renamer)
+//     is cleared so the JSONL custom-title becomes the canonical source
+//     going forward. Tags and archived flags stay in the sidecar.
 func Rename(jsonlPath, title string) error {
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -29,12 +35,10 @@ func Rename(jsonlPath, title string) error {
 	sid := strings.TrimSuffix(filepath.Base(jsonlPath), ".jsonl")
 
 	rec := map[string]any{
-		"type":      "ai-title",
-		"aiTitle":   title,
-		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
-		"sessionId": sid,
-		"userType":  "external",
-		"uuid":      "claude-sync-rename-" + time.Now().UTC().Format("20060102T150405.000000000Z"),
+		"type":        "custom-title",
+		"customTitle": title,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
+		"sessionId":   sid,
 	}
 	b, err := json.Marshal(rec)
 	if err != nil {
